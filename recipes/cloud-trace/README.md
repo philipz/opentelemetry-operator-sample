@@ -68,7 +68,7 @@ when deploying a prior OpenTelemetryCollector object), create it with `kubectl c
 Finally, annotate the Collector's ServiceAccount to use Workload Identity:
 
 ```
-kubectl annotate serviceaccount otel-collector \
+kubectl annotate opentelemetrycollectors otel \
     --namespace $COLLECTOR_NAMESPACE \
     iam.gke.io/gcp-service-account=otel-collector@${GCLOUD_PROJECT}.iam.gserviceaccount.com
 ```
