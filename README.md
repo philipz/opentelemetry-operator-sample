@@ -125,3 +125,13 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for details.
 ## License
 
 Apache 2.0; see [`LICENSE`](LICENSE) for details.
+
+## Certificate-manager DNS authorization
+
+[Create a DNS authorization](https://cloud.google.com/certificate-manager/docs/dns-authorizations?authuser=1)
+
+```
+gcloud certificate-manager dns-authorizations create cloudtrace-daslab-online \
+     --domain="cloudtrace.daslab.online"
+gcloud certificate-manager dns-authorizations describe cloudtrace-daslab-online
+```

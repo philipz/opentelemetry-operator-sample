@@ -1,0 +1,53 @@
+apiVersion: opentelemetry.io/v1alpha1
+kind: OpenTelemetryCollector
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"opentelemetry.io/v1alpha1","kind":"OpenTelemetryCollector","metadata":{"annotations":{},"name":"otel","namespace":"default"},"spec":{"config":"receivers:\n  otlp:\n    protocols:\n      grpc:\n      http:\nprocessors:\n\nexporters:\n  logging:\n    loglevel: debug\n\nservice:\n  pipelines:\n    traces:\n      receivers: [otlp]\n      processors: []\n      exporters: [logging]\n"}}
+  creationTimestamp: "2023-10-04T03:06:28Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/managed-by: opentelemetry-operator
+  name: otel
+  namespace: default
+  resourceVersion: "1214739"
+  uid: 446b785b-f1b2-4ea0-b7d9-ccf046647b1b
+spec:
+  config: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+          http:
+    processors:
+
+    exporters:
+      logging:
+        loglevel: debug
+
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: []
+          exporters: [logging]
+  ingress:
+    route: {}
+  managementState: managed
+  mode: deployment
+  observability:
+    metrics: {}
+  replicas: 1
+  resources: {}
+  targetAllocator:
+    prometheusCR:
+      scrapeInterval: 30s
+    resources: {}
+  upgradeStrategy: automatic
+status:
+  image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector:0.85.0
+  scale:
+    replicas: 1
+    selector: app.kubernetes.io/component=opentelemetry-collector,app.kubernetes.io/instance=default.otel,app.kubernetes.io/managed-by=opentelemetry-operator,app.kubernetes.io/name=otel-collector,app.kubernetes.io/part-of=opentelemetry,app.kubernetes.io/version=latest
+    statusReplicas: 1/1
+  version: 0.85.0
