@@ -1,0 +1,61 @@
+apiVersion: opentelemetry.io/v1alpha1
+kind: OpenTelemetryCollector
+metadata:
+  annotations:
+    iam.gke.io/gcp-service-account: otel-collector@das-keycloak-lab.iam.gserviceaccount.com
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"opentelemetry.io/v1alpha1","kind":"OpenTelemetryCollector","metadata":{"annotations":{},"name":"otel","namespace":"default"},"spec":{"config":"receivers:\n  otlp:\n    protocols:\n      grpc:\n      http:\nprocessors:\n  memory_limiter:\n    check_interval: 1s\n    limit_percentage: 65\n    spike_limit_percentage: 20\n\nexporters:\n  googlecloud:\n  logging:\n    loglevel: debug\n\nservice:\n  pipelines:\n    traces:\n      receivers: [otlp]\n      processors: [memory_limiter]\n      exporters: [logging, googlecloud]\n    metrics:\n      receivers: [otlp]\n      processors: [memory_limiter]\n      exporters: [googlecloud]\n    logs:\n      receivers: [otlp]\n      processors: [memory_limiter]\n      exporters: [googlecloud]\n","image":"otel/opentelemetry-collector-contrib:latest"}}
+  creationTimestamp: "2023-10-06T10:30:07Z"
+  generation: 6
+  labels:
+    app.kubernetes.io/managed-by: opentelemetry-operator
+  name: otel
+  namespace: default
+  resourceVersion: "12393787"
+  uid: a0aa99c4-cca2-4727-be9e-899ae67169a7
+spec:
+  config: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+          http:
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 65
+        spike_limit_percentage: 20
+
+    exporters:
+      googlecloud:
+      logging:
+        loglevel: debug
+
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter]
+          exporters: [logging, googlecloud]
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter]
+          exporters: [googlecloud]
+        logs:
+          receivers: [otlp]
+          processors: [memory_limiter]
+          exporters: [googlecloud]
+  image: otel/opentelemetry-collector-contrib:latest
+  ingress:
+    route: {}
+  managementState: managed
+  mode: deployment
+  observability:
+    metrics: {}
+  replicas: 1
+  resources: {}
+  targetAllocator:
+    prometheusCR:
+      scrapeInterval: 30s
+    resources: {}
+  upgradeStrategy: automatic
