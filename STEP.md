@@ -1,5 +1,6 @@
 [Use Public NAT with GKE](https://cloud.google.com/nat/docs/gke-example)
 https://cloud.google.com/kubernetes-engine/docs/how-to/private-clusters
+https://cloud.google.com/kubernetes-engine/docs/how-to/authorized-networks
 
 1. `gcloud config set project cloudrun-s001`
 
