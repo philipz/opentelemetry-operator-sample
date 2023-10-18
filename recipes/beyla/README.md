@@ -1,58 +1,41 @@
-# Daemonset and Deployment
+# eBPF HTTP Observability with Beyla
 
 This recipe demonstrates how to configure the OpenTelemetry Collector
-(as deployed by the Operator) to run as a daemonset and deployment.
+(as deployed by the Operator) to send [Beyla](https://github.com/grafana/beyla)
+metric and trace data to GCP [Cloud Trace](https://cloud.google.com/trace) and
+[Google Managed Service for Prometheus](https://cloud.google.com/stackdriver/docs/managed-prometheus).
 
-The daemonset is configured to send to the deployment collector by setting 
-`endpoint: otel-deployment-collector:4317` in the OTLP exporter. It runs one
-collector on each Kubernetes Node, and is configured with the `memory_limiter`
-processor to ensure it doesn't run into its memory limits and get OOM Killed.
+In this recipe, Beyla is configured to collect http metrics and traces from all
+workloads in the cluster without any code changes. Beyla has other features,
+such as auto-instrumentation for Go applications, but this sample does not use
+it for that purpose.
 
-The deployment is configured with a persistent queue to enable it to buffer
-telemetry during a network outage. To do this, it includes an `emptyDir` volume
-and requests `1Gi` of `ephemeral-storage` space to ensure it has guaranteed access
-to disk space for buffering. It configures the `file_storage` extension to make
-that disk space available to exporters in the collector, and configures the `googlecloud`
-exporter's `sending_queue` to use that storage for storing items in the queue.
-
-If overwriting an existing `OpenTelemetryCollector` object (i.e., you already have a running
-Collector through the Operator such as the one from the
+This recipe is based on applying a Collector config that enables the Google Cloud exporter.
+It provides an `OpenTelemetryCollector` object that, when created, instructs the Operator to
+create a new instance of the Collector with that config. If overwriting an existing `OpenTelemetryCollector`
+object (i.e., you already have a running Collector through the Operator such as the one from the
 [main README](../../README.md#starting-the-collector)), the Operator will update that existing
-Collector with the new config. The [main instrumentation.yaml](../../instrumentation.yaml)
-is configured to send to the daemonset to demonstrate forwarding metrics from a
-local daemonset pod to a deployment.
+Collector with the new config.
 
-## Why both?
-
-Why would you want to run both a daemonset and deployment?
-
-The answer is simple: You need a daemonset because you're observing data local to each kubernetes node
-but you'd like the *scalability* of a deployment.
-
-By using both, you can gain the flexibility you need to scale your observability:
-
-- Local node observability can be limited to the daemonset, e.g.
-  - `hostmetrics` receiver
-  - container logs (via [`filelog` receiver](https://opentelemetry.io/docs/kubernetes/collector/components/#filelog-receiver))
-- Instrumentation can still point at the deployment, ensuring you can scale horizontally with load.
-- The `memory_limiter` on the daemonset helps drop o11y to remain within scaling limits.
-- The persistent queue on the deployment helps deal with network outages when sending telemetry out of the cluster.
 
 ## Prerequisites
 
-* Cloud Trace API enabled in your GCP project
-* The `roles/cloudtrace.agent` [IAM permission](https://cloud.google.com/trace/docs/iam#roles)
+[!WARNING]  
+Beyla only works with GKE standard clusters, because GKE Auto restricts the use of privileged pods.
+
+* Cloud Trace and Cloud Monitoring APIs enabled in your GCP project
+* The `roles/cloudtrace.agent` and `roles/monitoring.metricWriter`
+  [IAM permissions](https://cloud.google.com/trace/docs/iam#roles)
   for your cluster's service account (or Workload Identity setup as shown below).
-* A running GKE cluster
+* A running (non-autopilot) GKE cluster
 * The OpenTelemetry Operator installed in your cluster
 * A Collector deployed with the Operator (recommended) or a ServiceAccount that can be used by the new Collector.
   * Note: This recipe assumes that you already have a Collector ServiceAccount named `otel-collector`,
     which is created by the operator when deploying an `OpenTelemetryCollector` object such as the
     one [in this repo](../../collector-config.yaml).
-* An application already deployed that is either:
-  * Instrumented to send traces to the Collector
-  * Auto-instrumented by the Operator
-  * [One of the sample apps](../../sample-apps) from this repo
+* An application already deployed that makes or serves HTTP requests:
+  * Note: Beyla does not currently support HTTPS or gRPC
+  * [One of the sample apps](../../sample-apps) from this repo, without auto-instrumentation enabled.
 
 Note that the `OpenTelemetryCollector` object needs to be in the same namespace as your sample
 app, or the Collector endpoint needs to be updated to point to the correct service address.
@@ -61,21 +44,26 @@ app, or the Collector endpoint needs to be updated to point to the correct servi
 
 ### Workload Identity Setup
 
-If you have Workload Identity enabled (on by default in GKE Autopilot), you'll need to set
-up a service account with permission to write traces to Cloud Trace. You can do this with
-the following commands:
+If you have Workload Identity enabled, you'll need to set up a service account with permission to
+write traces to Cloud Trace. You can do this with the following commands:
 
 ```
 export GCLOUD_PROJECT=<your GCP project ID>
 gcloud iam service-accounts create otel-collector --project=${GCLOUD_PROJECT}
 ```
 
-Then give that service account permission to write traces:
+Then give that service account permission to write traces and metrics:
 
 ```
 gcloud projects add-iam-policy-binding $GCLOUD_PROJECT \
     --member "serviceAccount:otel-collector@${GCLOUD_PROJECT}.iam.gserviceaccount.com" \
     --role "roles/cloudtrace.agent"
+```
+
+```
+gcloud projects add-iam-policy-binding $GCLOUD_PROJECT \
+    --member "serviceAccount:otel-collector@${GCLOUD_PROJECT}.iam.gserviceaccount.com" \
+    --role "roles/monitoring.metricWriter"
 ```
 
 Then bind the GCP service account to the Kubernetes ServiceAccount that is used by the Collector
@@ -102,27 +90,29 @@ kubectl annotate serviceaccount otel-collector \
 
 ### Deploying the Recipe
 
-Apply the `OpenTelemetryCollector` objects from this recipe:
+Apply the `OpenTelemetryCollector` object from this recipe:
 
 ```
-kubectl apply -f daemonset-collector-config.yaml
-kubectl apply -f deployment-collector-config.yaml
+kubectl apply -f collector-config.yaml
 ```
 
 (This will overwrite any existing collector config, or create a new one if none exists.)
 
-Once the Collector restarts, you should see traces from your application
+Once the Collector restarts, apply the Beyla Daemonset:
 
-## View your Spans
+```
+kubectl apply -f beyla-daemonset.yaml
+```
 
-Navigate to https://console.cloud.google.com/traces/list, and click on one of
-the traces to see its details. Make sure you are looking at the right GCP project.
-If you don't see any traces right away, enable auto-reload in the top-right to
-have the graph periodically refreshed.
+This will begin creating metrics and traces for all http traffic on each node,
+and exporting them to Google Cloud.
 
-The NodeJS example app trace will look something like:
+## View your Spans and Metrics
 
-![Screen Shot 2022-10-07 at 4 37 05 PM](https://user-images.githubusercontent.com/3262098/194649254-e75c5313-07e4-44dc-a807-e136a52d30c5.png)
+Navigate to the Trace explorer and view the traces created by Beyla.
+
+Navigate to the Metrics explorer and look for the `http_server_duration` and
+`http_client_duration` metrics.
 
 ## Troubleshooting
 

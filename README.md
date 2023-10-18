@@ -76,6 +76,7 @@ The one in this repo sets up a basic OTLP receiver and logging exporter:
 ```
 kubectl apply -f collector-config.yaml
 ```
+Others: https://github.com/GoogleCloudPlatform/opentelemetry-collector-builder-sample/blob/main/deploy/gke/simple/otel-config.yaml
 
 ### Auto-instrumenting Applications
 
