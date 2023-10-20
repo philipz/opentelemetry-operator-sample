@@ -1,5 +1,10 @@
+# OpenTelemetry on GCP GKE安裝步驟
+
+## 參考資料
+
 https://cloud.google.com/kubernetes-engine/docs/tutorials/private-cluster-bastion
 https://cloud.google.com/kubernetes-engine/docs/how-to/private-clusters
+https://github.com/GoogleCloudPlatform/opentelemetry-operator-sample
 
 1. `gcloud config set project cloudrun-s001`
 
