@@ -2,6 +2,7 @@
 
 ## 參考資料
 
+https://cloud.google.com/blog/topics/developers-practitioners/easy-telemetry-instrumentation-gke-opentelemetry-operator/
 https://cloud.google.com/kubernetes-engine/docs/tutorials/private-cluster-bastion
 https://cloud.google.com/kubernetes-engine/docs/how-to/private-clusters
 https://github.com/GoogleCloudPlatform/opentelemetry-operator-sample
