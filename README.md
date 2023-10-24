@@ -1,5 +1,7 @@
 # OpenTelemetry Operator Sample
 
+[環境建置及設置步驟](./STEP.md)
+
 This repo hosts samples for working with the OpenTelemetry Operator on GCP.
 
 * [Running the Operator](#running-the-operator)
