@@ -19,6 +19,7 @@ https://github.com/GoogleCloudPlatform/opentelemetry-operator-sample
     `gcloud compute networks create custom-network --subnet-mode custom`
 
 3. 建立Private Cluster
+    A. 使用enable-private-nodes和enable-private-endpoint
     ```
     gcloud container clusters create-auto private-cluster \
         --create-subnetwork=name=subnet-custom-network \
@@ -29,29 +30,55 @@ https://github.com/GoogleCloudPlatform/opentelemetry-operator-sample
         --region=asia-east1 \
         --network custom-network
     ```
-
-4. 設定防火牆允許 Identity-Aware Proxy 網段連入
+    
+    B. 只使用enable-private-nodes，不使用enable-private-endpoint
     ```
-    gcloud compute firewall-rules create allow-ssh \
-        --network custom-network \
-        --source-ranges 35.235.240.0/20 \
-        --allow tcp:22
+    gcloud container clusters create-auto private-cluster \
+        --create-subnetwork=name=subnet-custom-network \
+        --enable-master-authorized-networks \
+        --enable-private-nodes \
+        --master-ipv4-cidr 172.16.0.0/28 \
+        --region=asia-east1 \
+        --network custom-network
     ```
 
-5. 建立VPC內的Cloud Router提供連線到外部服務
+    如果只使用enable-private-nodes，不使用enable-private-endpoint，則須設定可以存取control plane的網段
+    加上A3的兩組連GCP IP: 123.51.165.160 & 61.216.71.43
+    ```
+    gcloud container clusters update private-cluster \
+        --enable-master-authorized-networks \
+        --master-authorized-networks 123.51.165.160/32
+    ```
+
+    ```
+    gcloud container clusters update private-cluster \
+        --enable-master-authorized-networks \
+        --master-authorized-networks 61.216.71.43/32
+    ```
+    不使用enable-private-endpoint，則Step 6~9可跳過，直接到進行安裝OpeneTelemetry Operator
+
+4. 建立VPC內的Cloud Router提供連線到外部服務
     ```
     gcloud compute routers create nat-router \
         --network custom-network \
         --region asia-east1
     ```
 
-6. 新增路由器配置允許自動為NAT閘道指派外部IP位址
+5. 新增路由器配置允許自動為NAT閘道指派外部IP位址
     ```
     gcloud compute routers nats create nat-config \
         --router-region asia-east1 \
         --router nat-router \
         --nat-all-subnet-ip-ranges \
         --auto-allocate-nat-external-ips
+    ```
+
+6. 設定防火牆允許 Identity-Aware Proxy 網段連入
+    ```
+    gcloud compute firewall-rules create allow-ssh \
+        --network custom-network \
+        --source-ranges 35.235.240.0/20 \
+        --allow tcp:22
     ```
 
 7. 建立跳板機(GKE使用enable-private-endpoint才需要)
@@ -122,11 +149,11 @@ https://github.com/GoogleCloudPlatform/opentelemetry-operator-sample
         )'
     ```
 
-2. 開通cert-manager firewall-rule，將172.23.0.0/28和gke-gaas-lab-cluster-e520b76a-node改為上面查詢的結果
+2. 開通cert-manager firewall-rule，將172.16.0.0/28和gke-private-cluster-0ed1d9bf-node改為上面查詢的結果
     ```
     gcloud compute firewall-rules create cert-manager-9443 \
-    --source-ranges 172.23.0.0/28 \
-    --target-tags gke-gaas-lab-cluster-e520b76a-node \
+    --source-ranges 172.16.0.0/28 \
+    --target-tags gke-private-cluster-0ed1d9bf-node \
     --allow TCP:9443
     ```
 
