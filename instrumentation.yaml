@@ -26,7 +26,10 @@ spec:
   sampler:
     type: parentbased_traceidratio
     argument: "0.25"
-
+  java:
+    env:
+      - name: OTEL_INSTRUMENTATION_RUNTIME_METRICS_ENABLED
+        value: "true"
   python:
     env:
     # Needed until https://github.com/open-telemetry/opentelemetry-python-contrib/issues/1361

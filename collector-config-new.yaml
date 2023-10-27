@@ -17,6 +17,9 @@ apiVersion: opentelemetry.io/v1alpha1
 kind: OpenTelemetryCollector
 metadata:
   name: otel
+  namespace: otel-collector
+  labels:
+    app: otel-collector
 spec:
   image: otel/opentelemetry-collector-contrib:latest
   config: |
@@ -30,22 +33,31 @@ spec:
         check_interval: 1s
         limit_percentage: 65
         spike_limit_percentage: 20
+      batch:
+        send_batch_max_size: 100
+        send_batch_size: 100
+        timeout: 5s
+      resourcedetection:
+        detectors: [gcp]
+        timeout: 10s
 
     exporters:
       googlecloud:
       logging:
         loglevel: debug
+      googlemanagedprometheus:
+        project: ${PROJECT_ID}
 
     service:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [memory_limiter]
+          processors: [batch, memory_limiter]
           exporters: [logging, googlecloud]
         metrics:
           receivers: [otlp]
-          processors: [memory_limiter]
-          exporters: [googlecloud]
+          processors: [batch, resourcedetection]
+          exporters: [googlemanagedprometheus]
         logs:
           receivers: [otlp]
           processors: [memory_limiter]
