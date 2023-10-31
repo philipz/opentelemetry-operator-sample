@@ -41,20 +41,19 @@ https://github.com/GoogleCloudPlatform/opentelemetry-operator-sample
         --region=asia-east1 \
         --network custom-network
     ```
+    設定防火牆，允許SSH 22 Port
+    ```
+    gcloud compute firewall-rules create allow-ssh --network custom-network --allow tcp:22
+    ```
 
     如果只使用enable-private-nodes，不使用enable-private-endpoint，則須設定可以存取control plane的網段
     加上A3的兩組連GCP IP: 123.51.165.160 & 61.216.71.43
     ```
     gcloud container clusters update private-cluster \
         --enable-master-authorized-networks \
-        --master-authorized-networks 123.51.165.160/32
+        --master-authorized-networks 123.51.165.160/32,61.216.71.43/32 --region asia-east1
     ```
 
-    ```
-    gcloud container clusters update private-cluster \
-        --enable-master-authorized-networks \
-        --master-authorized-networks 61.216.71.43/32
-    ```
     不使用enable-private-endpoint，則Step 6~9可跳過，直接到進行安裝OpeneTelemetry Operator
 
 4. 建立VPC內的Cloud Router提供連線到外部服務
@@ -134,8 +133,14 @@ https://github.com/GoogleCloudPlatform/opentelemetry-operator-sample
     `kubectl get ns`
 
 ## 安裝OpeneTelemetry Operator
+1. 獲取叢集存取憑證：
+    ```
+    gcloud container clusters get-credentials private-cluster \
+        --region=asia-east1 \
+        --project=cloudrun-s001
+    ```
 
-1. 查詢目前GKE防火牆規則，將private-cluster替換成正確叢集名稱
+2. 查詢目前GKE防火牆規則，將private-cluster替換成正確叢集名稱
     ```
     gcloud compute firewall-rules list \
         --filter 'name~^gke-private-cluster' \
@@ -149,7 +154,7 @@ https://github.com/GoogleCloudPlatform/opentelemetry-operator-sample
         )'
     ```
 
-2. 開通cert-manager firewall-rule，將172.16.0.0/28和gke-private-cluster-0ed1d9bf-node改為上面查詢的結果
+3. 開通cert-manager firewall-rule，將172.16.0.0/28和gke-private-cluster-0ed1d9bf-node改為上面查詢的結果
     ```
     gcloud compute firewall-rules create cert-manager-9443 \
     --source-ranges 172.16.0.0/28 \
@@ -157,7 +162,7 @@ https://github.com/GoogleCloudPlatform/opentelemetry-operator-sample
     --allow TCP:9443
     ```
 
-3. 安裝 cert-manager，必須有[Helm](https://helm.sh/)工具
+4. 安裝 cert-manager，必須有[Helm](https://helm.sh/)工具
     ```
     helm repo add jetstack https://charts.jetstack.io
     helm repo update
@@ -170,45 +175,87 @@ https://github.com/GoogleCloudPlatform/opentelemetry-operator-sample
     cert-manager jetstack/cert-manager
     ```
 
-4. 安裝 OpenTelemetry Operator
+5. 安裝 OpenTelemetry Operator
     `kubectl apply -f https://github.com/open-telemetry/opentelemetry-operator/releases/latest/download/opentelemetry-operator.yaml`
 
 ## 建立 Workload Identity 以供IAM service account對應到GKE service account
 
 出處：https://github.com/GoogleCloudPlatform/opentelemetry-operator-sample/tree/main/recipes/cloud-trace
 
-1. 建立otel-collector service account
-    ```
-    export GCLOUD_PROJECT=cloudrun-s001
-    gcloud iam service-accounts create otel-collector --project=${GCLOUD_PROJECT}
-    ```
+先創建名稱空間: otel-collector，作為Collector的instance使用，為了使用Workload Identity讓這個Collector pod有足夠的權限寫入GoogleManagedPrometheus, CloudTrace, 跟Cloud Logging，我們必須先製作一個serviceAccount: otel-collector-demo，同時因為我們會使用到prometheus scrape的能力，這個serviceAccount還要加上能夠列出pod,service的RBAC。如下所示：
+```
+export K8S_SA="otel-collector-demo"
+export K8S_NS="otel-collector"
+export GSA="otel-collector"
 
-2. 綁定Cloud Trace Agent角色
-    ```
-    gcloud projects add-iam-policy-binding $GCLOUD_PROJECT \
-        --member "serviceAccount:otel-collector@${GCLOUD_PROJECT}.iam.gserviceaccount.com" \
-        --role "roles/cloudtrace.agent"
-    ```
+kubectl create ns ${K8S_NS}
 
-3. 綁定Cloud Monitoring Metric Writer角色
-    ```
-    gcloud projects add-iam-policy-binding $GCLOUD_PROJECT \
-        --member "serviceAccount:otel-collector@${GCLOUD_PROJECT}.iam.gserviceaccount.com" \
-        --role "roles/monitoring.metricWriter"
-    ```
-4. 綁定Cloud logging log Writer角色
-    ```
-    gcloud projects add-iam-policy-binding $GCLOUD_PROJECT \
-        --member "serviceAccount:otel-collector@${GCLOUD_PROJECT}.iam.gserviceaccount.com" \
-        --role "roles/logging.logWriter"
-    ```
-5. 設定COLLECTOR收集的namespace，並綁定到GKE default namespece的otel-collector service account，請將default改成自己的namespace
-    ```
-    export COLLECTOR_NAMESPACE=default
-    gcloud iam service-accounts add-iam-policy-binding "otel-collector@${GCLOUD_PROJECT}.iam.gserviceaccount.com" \
-        --role roles/iam.workloadIdentityUser \
-        --member "serviceAccount:${GCLOUD_PROJECT}.svc.id.goog[${COLLECTOR_NAMESPACE}/otel-collector]"
-    ```
+cat << EOF | kubectl apply -f -
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ${K8S_SA}
+  namespace: ${K8S_NS}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector-demo
+  namespace: ${K8S_NS}
+rules:
+  - apiGroups: ['']
+    resources: ['nodes/stats', 'pods', 'services']
+    verbs: ['get', 'watch', 'list']
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector-demo
+  namespace: ${K8S_NS}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-collector-demo
+subjects:
+  - kind: ServiceAccount
+    name: ${K8S_SA}
+    namespace: ${K8S_NS}
+EOF
+```
+
+後續將資料送到Cloud Trace, Google Managed Prometheus,跟Cloud Logging，需要設定otel-collector pod對於這三個服務的權限。我們通過workload identity設定如下：
+
+```
+# 確認專案 PROJECT_ID變數
+gcloud config set project ${PROJECT_ID}
+
+# 1.建立Google Service Account: otel-collector
+gcloud iam service-accounts create ${GSA}
+
+# 綁定Cloud Trace Agent, Cloud Monitoring Metric Writer, 以及Cloud Logging的寫入權限。
+gcloud projects add-iam-policy-binding ${PROJECT_ID}\
+  --member=serviceAccount:${GSA}@${PROJECT_ID}.iam.gserviceaccount.com \
+  --role=roles/cloudtrace.agent
+
+gcloud projects add-iam-policy-binding ${PROJECT_ID}\
+  --member=serviceAccount:${GSA}@${PROJECT_ID}.iam.gserviceaccount.com \
+  --role=roles/monitoring.metricWriter
+
+gcloud projects add-iam-policy-binding ${PROJECT_ID}\
+  --member=serviceAccount:${GSA}@${PROJECT_ID}.iam.gserviceaccount.com \
+  --role=roles/logging.logWriter
+
+# 設定Workload Identity
+gcloud iam service-accounts add-iam-policy-binding \
+  --role roles/iam.workloadIdentityUser \
+  --member "serviceAccount:${PROJECT_ID}.svc.id.goog[${K8S_NS}/${K8S_SA}]" \
+  ${GSA}@${PROJECT_ID}.iam.gserviceaccount.com \
+
+kubectl annotate serviceaccount \
+  --namespace ${K8S_NS} \
+  ${K8S_SA} \
+iam.gke.io/gcp-service-account=${GSA}@${PROJECT_ID}.iam.gserviceaccount.com
+```
 
 ## 建立並設定 OpenTelemetry Collector
 
@@ -218,7 +265,11 @@ apiVersion: opentelemetry.io/v1alpha1
 kind: OpenTelemetryCollector
 metadata:
   name: otel
+  namespace: otel-collector
+  labels:
+    app: otel-collector
 spec:
+  serviceAccount: otel-collector-demo
   image: otel/opentelemetry-collector-contrib:latest
   config: |
     receivers:
@@ -231,25 +282,39 @@ spec:
         check_interval: 1s
         limit_percentage: 65
         spike_limit_percentage: 20
+      batch:
+        send_batch_max_size: 100
+        send_batch_size: 100
+        timeout: 5s
+      resourcedetection:
+        detectors: [gcp]
+        timeout: 10s
 
     exporters:
       googlecloud:
       logging:
         loglevel: debug
+      googlemanagedprometheus:
+        project: ${PROJECT_ID}
 
     service:
+      telemetry:
+        logs:
+          level: "debug"
+        metrics:
+          address: ":8888"
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [memory_limiter]
+          processors: [batch, memory_limiter]
           exporters: [logging, googlecloud]
         metrics:
           receivers: [otlp]
-          processors: [memory_limiter]
-          exporters: [googlecloud]
+          processors: [batch, memory_limiter, resourcedetection]
+          exporters: [googlemanagedprometheus]
         logs:
           receivers: [otlp]
-          processors: [memory_limiter]
+          processors: [batch, memory_limiter]
           exporters: [googlecloud]
 ```
 

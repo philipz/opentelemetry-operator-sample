@@ -21,7 +21,15 @@ metadata:
   labels:
     app: otel-collector
 spec:
+  serviceAccount: otel-collector-demo
   image: otel/opentelemetry-collector-contrib:latest
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "0.25"
+    limits:
+      memory: "512Mi"
+      cpu: "0.25"
   config: |
     receivers:
       otlp:
@@ -38,7 +46,7 @@ spec:
         send_batch_size: 100
         timeout: 5s
       resourcedetection:
-        detectors: [gcp]
+        detectors: [env, gcp]
         timeout: 10s
 
     exporters:
@@ -49,16 +57,21 @@ spec:
         project: ${PROJECT_ID}
 
     service:
+      telemetry:
+        logs:
+          level: "debug"
+        metrics:
+          address: ":8888"
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [batch, memory_limiter]
+          processors: [batch, memory_limiter, resourcedetection]
           exporters: [logging, googlecloud]
         metrics:
           receivers: [otlp]
-          processors: [batch, resourcedetection]
+          processors: [batch, memory_limiter, resourcedetection]
           exporters: [googlemanagedprometheus]
         logs:
           receivers: [otlp]
-          processors: [memory_limiter]
+          processors: [batch, memory_limiter, resourcedetection]
           exporters: [googlecloud]
