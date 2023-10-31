@@ -271,6 +271,13 @@ metadata:
 spec:
   serviceAccount: otel-collector-demo
   image: otel/opentelemetry-collector-contrib:latest
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "0.25"
+    limits:
+      memory: "512Mi"
+      cpu: "0.25"
   config: |
     receivers:
       otlp:
@@ -287,7 +294,7 @@ spec:
         send_batch_size: 100
         timeout: 5s
       resourcedetection:
-        detectors: [gcp]
+        detectors: [env, gcp]
         timeout: 10s
 
     exporters:
@@ -306,7 +313,7 @@ spec:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [batch, memory_limiter]
+          processors: [batch, memory_limiter, resourcedetection]
           exporters: [logging, googlecloud]
         metrics:
           receivers: [otlp]
@@ -314,7 +321,7 @@ spec:
           exporters: [googlemanagedprometheus]
         logs:
           receivers: [otlp]
-          processors: [batch, memory_limiter]
+          processors: [batch, memory_limiter, resourcedetection]
           exporters: [googlecloud]
 ```
 
@@ -330,6 +337,36 @@ spec:
 
 4. 建立 Instrumentation
     `kubectl apply -f instrumentation.yaml`
+```
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: my-instrumentation
+spec:
+  exporter:
+    endpoint: http://otel-collector.otel-collector.svc.cluster.local:4317
+  propagators:
+    - tracecontext
+    - baggage
+    - b3
+  sampler:
+    type: parentbased_traceidratio
+    argument: "0.25"
+  java:
+    env:
+      - name: OTEL_INSTRUMENTATION_RUNTIME_METRICS_ENABLED
+        value: "true"
+  python:
+    env:
+    # Needed until https://github.com/open-telemetry/opentelemetry-python-contrib/issues/1361
+    # is fixed
+    - name: OTEL_METRICS_EXPORTER
+      value: none
+    # Python autoinstrumentation only supports OTLP/HTTP which the collector runs on port 4318,
+    # see https://github.com/open-telemetry/opentelemetry-operator/issues/924
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: http://otel-collector.otel-collector.svc.cluster.local:4318
+```
 
 ## 應用程式YAML加上auto instrumentation的annotation
 
