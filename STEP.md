@@ -296,6 +296,13 @@ spec:
       resourcedetection:
         detectors: [env, gcp]
         timeout: 10s
+      # 過濾掉Health Check的Span 
+      filter/dropcheck:
+        error_mode: ignore
+        traces:
+          span:
+            - 'name == "GET /api/v1/status"'
+            - 'name == "HealthCheckController.getHealthStatus"'
 
     exporters:
       googlecloud:
@@ -313,7 +320,7 @@ spec:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [batch, memory_limiter, resourcedetection]
+          processors: [batch, memory_limiter, resourcedetection, filter/dropcheck]
           exporters: [logging, googlecloud]
         metrics:
           receivers: [otlp]
