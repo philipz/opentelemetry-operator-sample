@@ -43,7 +43,7 @@ https://github.com/GoogleCloudPlatform/opentelemetry-operator-sample
     ```
     設定防火牆，允許SSH 22 Port
     ```
-    gcloud compute firewall-rules create allow-ssh --network custom-network --allow tcp:22
+    gcloud compute firewall-rules create allow-ssh --network custom-network --source-ranges 123.51.165.160/32,61.216.71.43/32 --allow tcp:22
     ```
 
     如果只使用enable-private-nodes，不使用enable-private-endpoint，則須設定可以存取control plane的網段
