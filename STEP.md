@@ -319,15 +319,15 @@ spec:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [batch, memory_limiter, resourcedetection, filter/dropcheck]
-          exporters: [logging, googlecloud]
+          processors: [batch, resourcedetection, filter/dropcheck]
+          exporters: [googlecloud]
         metrics:
           receivers: [otlp]
-          processors: [batch, memory_limiter, resourcedetection]
+          processors: [batch, resourcedetection]
           exporters: [googlemanagedprometheus]
         logs:
           receivers: [otlp]
-          processors: [batch, memory_limiter, resourcedetection]
+          processors: [batch, resourcedetection]
           exporters: [googlecloud]
 EOF
 ```

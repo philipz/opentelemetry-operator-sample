@@ -70,7 +70,7 @@ spec:
         traces:
           receivers: [otlp]
           processors: [batch, resourcedetection, filter/dropcheck]
-          exporters: [logging, googlecloud]
+          exporters: [googlecloud]
         metrics:
           receivers: [otlp]
           processors: [batch, resourcedetection]
