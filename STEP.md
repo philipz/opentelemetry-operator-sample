@@ -286,10 +286,6 @@ spec:
           grpc:
           http:
     processors:
-      memory_limiter:
-        check_interval: 1s
-        limit_percentage: 65
-        spike_limit_percentage: 20
       batch:
         send_batch_max_size: 100
         send_batch_size: 100
@@ -307,6 +303,8 @@ spec:
 
     exporters:
       googlecloud:
+        log:
+          default_log_name: opentelemetry.io/collector-exported-log
       logging:
         loglevel: debug
       googlemanagedprometheus:
@@ -357,6 +355,8 @@ spec:
         value: "true"
       - name: OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED
         value: "true"
+      - name: OTEL_LOGS_EXPORTER
+        value: "otlp"
   python:
     env:
     # Needed until https://github.com/open-telemetry/opentelemetry-python-contrib/issues/1361
