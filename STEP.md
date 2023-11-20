@@ -259,17 +259,18 @@ iam.gke.io/gcp-service-account=${GSA}@${PROJECT_ID}.iam.gserviceaccount.com
 
 ## 建立並設定 OpenTelemetry Collector
 
-1. 新增 otel-collector 的部署檔 collector-config-new.yaml
+1. 新增 otel-collector 的部署
 ```
+cat << EOF | kubectl apply -f -
 apiVersion: opentelemetry.io/v1alpha1
 kind: OpenTelemetryCollector
 metadata:
   name: otel
-  namespace: otel-collector
+  namespace: ${K8S_NS}
   labels:
     app: otel-collector
 spec:
-  serviceAccount: otel-collector-demo
+  serviceAccount: ${K8S_SA}
   image: otel/opentelemetry-collector-contrib:latest
   resources:
     requests:
@@ -330,19 +331,10 @@ spec:
           receivers: [otlp]
           processors: [batch, memory_limiter, resourcedetection]
           exporters: [googlecloud]
+EOF
 ```
 
-2. 建立 OpenTelemetry Collector
-    `kubectl apply -f collector-config-new.yaml`
-
-3. 添加 annotation 到 OpenTelemetry Collector
-    ```
-    kubectl annotate opentelemetrycollectors otel \
-        --namespace $COLLECTOR_NAMESPACE \
-        iam.gke.io/gcp-service-account=otel-collector@${GCLOUD_PROJECT}.iam.gserviceaccount.com
-    ```
-
-4. 建立 Instrumentation
+2. 建立 Instrumentation
     `kubectl apply -f instrumentation.yaml`
 ```
 apiVersion: opentelemetry.io/v1alpha1
@@ -362,6 +354,8 @@ spec:
   java:
     env:
       - name: OTEL_INSTRUMENTATION_RUNTIME_METRICS_ENABLED
+        value: "true"
+      - name: OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED
         value: "true"
   python:
     env:
